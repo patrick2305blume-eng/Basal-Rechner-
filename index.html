@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!D<!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
@@ -6,73 +6,135 @@
     <title>Basalraten-Rechner Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 12px; width: 100%; max-width: 500px; border: 1px solid #333; }
-        input, select { width: 100%; padding: 12px; margin: 10px 0; background: #000; color: #fff; border: 1px solid #444; border-radius: 8px; box-sizing: border-box; }
-        button { width: 100%; background: #3498db; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .chart-box { width: 100%; max-width: 600px; height: 300px; margin-top: 20px; display: none; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 8px; border-bottom: 1px solid #333; text-align: left; }
+        body { font-family: sans-serif; background: #121212; color: white; padding: 20px; display: flex; flex-direction: column; align-items: center; margin: 0; }
+        .box { background: #1e1e1e; padding: 25px; border-radius: 12px; width: 100%; max-width: 500px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { color: #5dade2; text-align: center; margin-top: 0; }
+        label { display: block; margin-top: 15px; color: #bbb; font-size: 14px; font-weight: bold; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; background: #0c0c0c; color: white; border: 1px solid #444; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; background: #3498db; color: white; border: none; padding: 15px; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: background 0.3s; }
+        button:hover { background: #2980b9; }
+        #chartBox { width: 100%; max-width: 600px; height: 350px; margin-top: 25px; display: none; background: #1e1e1e; padding: 15px; border-radius: 12px; border: 1px solid #333; }
+        #res { width: 100%; max-width: 500px; margin-top: 25px; display: none; }
+        table { width: 100%; border-collapse: collapse; background: #1e1e1e; border-radius: 8px; overflow: hidden; }
+        th, td { border-bottom: 1px solid #333; padding: 12px; text-align: left; }
+        th { background: #252525; color: #5dade2; }
+        tr:hover { background: #2a2a2a; }
+        .disclaimer { font-size: 11px; color: #666; margin-top: 20px; text-align: center; line-height: 1.4; }
     </style>
 </head>
 <body>
-    <div class="card">
+
+    <div class="box">
         <h2>Basal-Rechner</h2>
+        
         <label>Gesamt-Insulin (TDD):</label>
-        <input type="number" id="tdd" step="0.1">
-        <label>Alter:</label>
-        <select id="ageGroup">
+        <input type="number" id="tdd" step="0.1" placeholder="z.B. 26">
+        
+        <label>Altersgruppe:</label>
+        <select id="age">
             <option value="0-6">0-6 Jahre</option>
             <option value="6-12">6-12 Jahre</option>
             <option value="12-18+">12-18+ Jahre</option>
         </select>
-        <label>Basalanteil (%):</label>
-        <input type="number" id="basalPercent" value="35" min="30" max="40">
-        <button onclick="calc()">Berechnen</button>
+        
+        <label>Wunsch-Basalanteil (%):</label>
+        <input type="number" id="perc" value="35" min="30" max="40">
+        
+        <button onclick="rechnen()">Berechnen & Diagramm</button>
     </div>
 
-    <div id="chartBox" class="chart-box"><canvas id="myChart"></canvas></div>
-    <div id="resultTable" style="display:none; width:100%; max-width:500px;">
-        <table id="tbl"><thead><tr><th>Uhrzeit</th><th>IE/h</th></tr></thead><tbody></tbody></table>
+    <div id="chartBox"><canvas id="myChart"></canvas></div>
+
+    <div id="res">
+        <table>
+            <thead>
+                <tr>
+                    <th>Uhrzeit</th>
+                    <th>Rate (IE/h)</th>
+                </tr>
+            </thead>
+            <tbody id="tabBody"></tbody>
+        </table>
+        <div class="disclaimer">
+            HINWEIS: Dies ist eine Orientierungshilfe basierend auf TDD-Faktoren. 
+            Änderungen an der Therapie bitte nur nach Rücksprache mit dem Arzt.
+        </div>
     </div>
 
 <script>
     let chart;
-    const data = {
+    // Deine handschriftlichen Prozentwerte pro Stunde
+    const kurven = {
         "0-6": [4, 3.6, 3.4, 3.7, 3.8, 3.9, 4.2, 4, 3.7, 3.5, 3.1, 2.8, 2.9, 3.2, 3.6, 4, 4.5, 5, 5.1, 5.5, 5.8, 6.1, 5.5, 5.1],
         "6-12": [4.2, 4.3, 4.4, 4.7, 4.9, 5, 5, 4.5, 3.9, 3.3, 3.1, 2.9, 2.9, 3, 3.3, 3.9, 4.5, 4.8, 4.7, 4.7, 4.7, 4.5, 4.5, 4.3],
         "12-18+": [3.4, 3.8, 4.3, 5, 5.6, 6.1, 5.9, 5.1, 4.3, 3.8, 3.5, 3.4, 3.3, 3.4, 3.7, 4, 4.6, 4.6, 4.5, 4, 3.7, 3.4, 3.3, 3.3]
     };
 
-    function calc() {
-        const tdd = document.getElementById('tdd').value;
-        const perc = document.getElementById('basalPercent').value;
-        const age = document.getElementById('ageGroup').value;
-        if(!tdd) return alert("TDD fehlt!");
+    function rechnen() {
+        const t = parseFloat(document.getElementById('tdd').value);
+        const p = parseFloat(document.getElementById('perc').value);
+        const a = document.getElementById('age').value;
+        
+        if(!t || t <= 0) return alert("Bitte eine gültige TDD eingeben.");
 
-        const totalBasal = tdd * (perc / 100);
-        const rates = data[age].map(p => {
-            let val = (tdd * 0.35) * (p/100) * (perc/35);
-            return Math.round(val * 40) / 40; // Rundung 0.025
+        // Berechnung der stündlichen Raten
+        // Wir skalieren die 35%-Referenzwerte auf den Wunschprozentsatz
+        const stundenRaten = kurven[a].map(proz => {
+            let ie = (t * 0.35) * (proz/100) * (p/35);
+            // RUNDUNG auf 0.01 IE
+            return Math.round(ie * 100) / 100;
         });
 
+        // UI Elemente einblenden
         document.getElementById('chartBox').style.display = 'block';
-        document.getElementById('resultTable').style.display = 'block';
+        document.getElementById('res').style.display = 'block';
 
-        const tbody = document.querySelector('#tbl tbody');
-        tbody.innerHTML = rates.map((r, i) => `<tr><td>${i}:00-${i+1}:00</td><td>${r.toFixed(3)}</td></tr>`).join('');
+        // Tabelle befüllen (mit 2 Nachkommastellen)
+        const tb = document.getElementById('tabBody');
+        tb.innerHTML = stundenRaten.map((r, i) => `
+            <tr>
+                <td>${i}:00 - ${i+1}:00</td>
+                <td>${r.toFixed(2).replace('.', ',')}</td>
+            </tr>
+        `).join('');
 
+        // Diagramm erstellen/aktualisieren
         const ctx = document.getElementById('myChart').getContext('2d');
         if(chart) chart.destroy();
+        
+        // Daten für Step-Chart aufbereiten (Stunden verdoppeln)
+        const stepData = [];
+        for (let h = 0; h < 24; h++) {
+            stepData.push({ x: h, y: stundenRaten[h] });
+            stepData.push({ x: h + 1, y: stundenRaten[h] });
+        }
+
         chart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: Array.from({length: 24}, (_, i) => i),
-                datasets: [{ label: 'IE/h', data: rates, stepped: true, borderColor: '#3498db', fill: true, backgroundColor: 'rgba(52,152,219,0.2)' }]
+                datasets: [{
+                    label: 'IE/h',
+                    data: stepData,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                    fill: true,
+                    stepped: true,
+                    borderWidth: 2,
+                    pointRadius: 0
+                }]
             },
-            options: { scales: { y: { beginAtZero: true } } }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'linear', min: 0, max: 24, ticks: { stepSize: 2, color: '#aaa' }, grid: { color: '#333' } },
+                    y: { beginAtZero: true, ticks: { color: '#aaa' }, grid: { color: '#333' }, title: { display: true, text: 'Einheiten / Std.', color: '#aaa' } }
+                },
+                plugins: { legend: { display: false } }
+            }
         });
     }
 </script>
 </body>
-</html> 
+</html>
+
